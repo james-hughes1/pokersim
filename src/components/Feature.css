@@ -1,0 +1,24 @@
+.features {
+    display: flex;
+    justify-content: space-around;
+    background: #f1f1f1;
+    padding: 50px 20px;
+    text-align: center;
+  }
+  
+  .feature {
+    max-width: 300px;
+    margin: 20px;
+  }
+  
+  .feature h2 {
+    font-size: 2rem;
+    color: #333;
+    margin-bottom: 1rem;
+  }
+  
+  .feature p {
+    font-size: 1rem;
+    color: #555;
+  }
+  
