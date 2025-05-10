@@ -1,14 +1,17 @@
-import React from "react";
-import Hero from "./components/Hero";
-import Features from "./components/Features";
-import "./App.css";
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+
+import LandingPage from './pages/LandingPage';
+import LlmChatPage from './pages/LlmChatPage';
 
 function App() {
   return (
-    <div className="App">
-      <Hero />
-      <Features />
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/chat" element={<LlmChatPage />} />
+      </Routes>
+    </Router>
   );
 }
 
