@@ -1,58 +1,39 @@
-// src/pages/api/generate.js
-import axios from 'axios';
+// /api/generate.js
 
 export default async function handler(req, res) {
-  // Ensure the request is a POST request
+  // Check if the request is a POST
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  // Get the prompt from the body
-  const { prompt } = req.body;
+  // Get the API key securely from environment variables
+  const cohereApiKey = process.env.COHERE_API_KEY;
 
-  // Check if prompt is provided
-  if (!prompt || typeof prompt !== 'string') {
-    return res.status(400).json({ error: 'Invalid prompt' });
+  if (cohereApiKey) {
+    console.log('Cohere API key is found.');
+  } else {
+    console.log('Cohere API key is not found.');
   }
 
   try {
-    // Get API key from environment variables
-    const cohereApiKey = process.env.COHERE_API_KEY || process.env.REACT_APP_COHERE_API_KEY;
-
-    // Check if API key is available
-    if (!cohereApiKey) {
-      console.error('API key is missing');
-      return res.status(500).json({ error: 'API key missing' });
-    }
-
-    // Make the API request to Cohere
-    const response = await axios.post(
-      'https://api.cohere.com/v2/chat',
-      {
-        stream: false,
-        model: 'command-a-03-2025',
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
+    const response = await fetch('https://api.cohere.com/v2/chat', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cohereApiKey}`,
+        'Content-Type': 'application/json',
       },
-      {
-        headers: {
-          Authorization: `Bearer ${cohereApiKey}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+      body: JSON.stringify({
+        model: 'command-a-03-2025',
+        messages: [{ role: 'user', content: req.body.prompt }],
+      }),
+    });
 
-    // Get the generated response text from Cohere API
-    const generatedText = response.data.message.content[0].text;
+    const data = await response.json();
 
-    // Send the response back to the frontend
-    res.status(200).json({ text: generatedText });
+    // Send the response from Cohere back to the client
+    res.status(200).json(data);
   } catch (error) {
-    console.error('Error generating text:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Failed to generate text' });
+    console.error('Error calling Cohere API:', error);
+    res.status(500).json({ error: 'Failed to generate response' });
   }
 }
