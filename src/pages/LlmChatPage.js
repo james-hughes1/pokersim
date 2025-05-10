@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { getCohereResponse } from '../services/cohereApi'; // Import the function from services/cohereApi.js
 
 function LlmChatPage() {
   const [prompt, setPrompt] = useState('');
@@ -7,35 +7,15 @@ function LlmChatPage() {
   const [loading, setLoading] = useState(false);
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) return;
+    if (!prompt.trim()) return; // Don't proceed if the prompt is empty
     setLoading(true);
-  
+
     try {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Assuming local API key.')
-        // LOCAL DEVELOPMENT: call Cohere API directly
-        const cohereApiKey = process.env.REACT_APP_COHERE_API_KEY;
-  
-        const response = await axios.post(
-          'https://api.cohere.com/v2/chat',
-          {
-            stream: false,
-            model: 'command-a-03-2025',
-            messages: [{ role: 'user', content: prompt }]
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${cohereApiKey}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        setResponseText(response.data.message.content[0].text);
-      } else {
-        // PRODUCTION: call your own backend API
-        const response = await axios.post('/api/generate', { prompt });
-        setResponseText(response.data.text);
-      }
+      // Call the getCohereResponse function from the service
+      const response = await getCohereResponse(prompt);
+
+      // Set the generated response
+      setResponseText(response);
     } catch (error) {
       console.error('Error generating text:', error);
       setResponseText('Something went wrong.');

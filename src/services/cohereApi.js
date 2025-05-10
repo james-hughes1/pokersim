@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const cohereApiKey = process.env.COHERE_API_KEY || process.env.REACT_APP_COHERE_API_KEY;
+const cohereApiKey = process.env.REACT_APP_COHERE_API_KEY;
 
 // Log a message indicating whether the API key is found
 if (cohereApiKey) {
