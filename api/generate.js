@@ -11,6 +11,12 @@ export default async function handler(req, res) {
   // Get the API key: Try Vercel environment first, fallback to React local env
   const cohereApiKey = process.env.COHERE_API_KEY;
 
+  if (cohereApiKey) {
+    console.log('Cohere API key is found.');
+  } else {
+    console.log('Cohere API key is not found.');
+  }
+
   if (!cohereApiKey) {
     return res.status(500).json({ error: 'Cohere API key not found' });
   }
