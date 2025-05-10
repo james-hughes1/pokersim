@@ -1,14 +1,15 @@
 import axios from 'axios';
 
-const cohereApiKey = process.env.REACT_APP_COHERE_API_KEY;  // Get the API key from environment variables
+const cohereApiKey = process.env.COHERE_API_KEY || process.env.REACT_APP_COHERE_API_KEY;
 
 export const getCohereResponse = async (prompt) => {
   try {
+    // Cohere API request
     const response = await axios.post(
       'https://api.cohere.com/v2/chat',
       {
         stream: false,
-        model: 'command-a-03-2025',  // Use the model you want
+        model: 'command-a-03-2025',
         messages: [
           {
             role: 'user',
@@ -18,7 +19,7 @@ export const getCohereResponse = async (prompt) => {
       },
       {
         headers: {
-          Authorization: `Bearer ${cohereApiKey}`,  // API key from the environment variables
+          Authorization: `Bearer ${cohereApiKey}`,
           'Content-Type': 'application/json',
         },
       }
