@@ -2,6 +2,13 @@ import axios from 'axios';
 
 const cohereApiKey = process.env.COHERE_API_KEY || process.env.REACT_APP_COHERE_API_KEY;
 
+// Log a message indicating whether the API key is found
+if (cohereApiKey) {
+    console.log('Cohere API key is found.');
+  } else {
+    console.log('Cohere API key is not found.');
+  }
+
 export const getCohereResponse = async (prompt) => {
   try {
     // Cohere API request
