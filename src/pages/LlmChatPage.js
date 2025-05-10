@@ -12,6 +12,7 @@ function LlmChatPage() {
   
     try {
       if (process.env.NODE_ENV === 'development') {
+        console.log('Assuming local API key.')
         // LOCAL DEVELOPMENT: call Cohere API directly
         const cohereApiKey = process.env.REACT_APP_COHERE_API_KEY;
   
