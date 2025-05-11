@@ -1,20 +1,41 @@
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";  // Change here
+import "./LandingPage.css";
 
-function LandingPage() {
-  const navigate = useNavigate();
+const LandingPage = () => {
+  const [name, setName] = useState("");
+  const navigate = useNavigate();  // Change here
+
+  const handleNameChange = (e) => {
+    setName(e.target.value);
+  };
+
+  const handleSubmit = () => {
+    if (name.trim()) {
+      navigate("/game", { state: { name } });  // Change here
+    } else {
+      alert("Please enter a name!");
+    }
+  };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4">
-      <h1 className="text-4xl font-bold mb-6">Welcome to Poker Simulator</h1>
-      <p className="mb-6 text-center">The most thrilling poker experience online.</p>
-      <button
-        onClick={() => navigate('/chat')}
-        className="bg-green-600 text-white px-6 py-3 rounded hover:bg-green-700"
-      >
-        Start Chatting with Poker AI
+    <div className="landing-container">
+      <h1 className="landing-title">Welcome to Poker Game</h1>
+      <p className="landing-description">
+        Enter your name to start playing!
+      </p>
+      <input
+        type="text"
+        value={name}
+        onChange={handleNameChange}
+        className="name-input"
+        placeholder="Enter your name"
+      />
+      <button onClick={handleSubmit} className="start-button">
+        Start Game
       </button>
     </div>
   );
-}
+};
 
 export default LandingPage;
