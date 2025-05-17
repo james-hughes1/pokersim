@@ -12,7 +12,9 @@ const LandingPage = () => {
 
   const handleSubmit = () => {
     if (name.trim()) {
-      navigate("/game", { state: { name } });  // Change here
+      // navigate("/game", { state: { name } });  // Change here
+      localStorage.setItem("userName", name);
+      navigate("/game");
     } else {
       alert("Please enter a name!");
     }

@@ -4,15 +4,28 @@ import "./GamePage.css";
 import PokerGame from "../poker_engine/poker.js";
 
 const initialPlayers = [
-  { name: "Alice", stack: 500, currentBet: 0, folded: false },
-  { name: "Bob", stack: 500, currentBet: 0, folded: false },
-  { name: "Charlie", stack: 500, currentBet: 0, folded: false },
-  { name: "Diana", stack: 500, currentBet: 0, folded: false },
-  { name: "Eve", stack: 500, currentBet: 0, folded: false },
+  { name: "Player" },
+  { name: "Bob" },
+  { name: "Charlie" },
+  { name: "Diana" },
+  { name: "Eve" },
 ];
+
 const game = new PokerGame(initialPlayers.map(player=>player.name));
 
 const GamePage = () => {
+
+  // useEffect(() => {
+  //   // Only call ONCE when the page loads
+  //   handleGenerate(
+  //     "Produce a JSON that details the actions of a poker player. Here is the history of the current game so far, with the context that this player is 3rd out of 5 players. First round bets: 5, 10, 10, 10, 10, you get A club 2 diamond, community cards are A spades 3 spades, bets 10 fold, now it's your turn."
+  //   );
+  // }, []); // ← empty dependency array = run only ONCE after mount
+
+  // useEffect(() => {
+  //   console.log(move);
+  // }, [move]); // ← log when move changes
+
   const [, updateState] = useState(0);  // <- create dummy state
   const forceUpdate = () => updateState(n => n + 1);  // <- define forceUpdate
   const [raiseAmounts, setRaiseAmounts] = useState(
@@ -23,7 +36,6 @@ const GamePage = () => {
     game.bettingRound.processAction(playerName, action, amount);
     forceUpdate(n => n + 1); // Re-render after each move
   };
-  
 
   const handleSliderChange = (index, value) => {
     const updated = [...raiseAmounts];
@@ -47,17 +59,6 @@ const GamePage = () => {
       console.error('Error generating text:', error);
     }
   };
-
-  // useEffect(() => {
-  //   // Only call ONCE when the page loads
-  //   handleGenerate(
-  //     "Produce a JSON that details the actions of a poker player. Here is the history of the current game so far, with the context that this player is 3rd out of 5 players. First round bets: 5, 10, 10, 10, 10, you get A club 2 diamond, community cards are A spades 3 spades, bets 10 fold, now it's your turn."
-  //   );
-  // }, []); // ← empty dependency array = run only ONCE after mount
-
-  // useEffect(() => {
-  //   console.log(move);
-  // }, [move]); // ← log when move changes
 
   return (
     <div className="game-container">
@@ -108,19 +109,6 @@ const GamePage = () => {
   );
 };
 
-// Example Usage
+export default GamePage;
 
 game.startGame();
-
-// game.playerAction("Alice", "raise", 50);
-// game.playerAction("Bob", "call", 50);
-// game.playerAction("Charlie", "fold");
-
-// game.nextStage(); // Flop
-
-// game.playerAction("Alice", "check");
-// game.playerAction("Bob", "raise", 100);
-
-// game.printSummary("Alice");
-
-export default GamePage;

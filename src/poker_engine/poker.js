@@ -1,3 +1,5 @@
+var Hand = require('pokersolver').Hand;
+
 function formatCards(cards) {
     const suitSymbols = {
       'Clubs': '♣',
@@ -9,8 +11,47 @@ function formatCards(cards) {
     return cards.map(card => `${card.rank}${suitSymbols[card.suit]}`).join(' ');
 }
 
+// Helper to convert suit to letter
+function suitToChar(suit) {
+  switch (suit.toLowerCase()) {
+    case 'hearts': return 'h';
+    case 'diamonds': return 'd';
+    case 'clubs': return 'c';
+    case 'spades': return 's';
+    default: throw new Error('Invalid suit: ' + suit);
+  }
+}
+
+// Convert ['A', 'Hearts'] -> 'Ah'
+function cardToString(card) {
+  return `${card.rank}${suitToChar(card.suit)}`;
+}
+
+// Main function to convert input into 7-card strings per player
+function buildPlayerHands(communityCards, playersHoleCards) {
+  const communityStrs = communityCards.map(cardToString);
+
+  return playersHoleCards.map(holeCards => {
+    const holeStrs = holeCards.map(cardToString);
+    return [...holeStrs, ...communityStrs];
+  });
+}
+
+function findWinnerIndexes(activeHands, winnerHands) {
+  // Sort each hand alphabetically for comparison
+  const normalize = hand => [...hand].sort().join(',');
+
+  const normalizedActive = activeHands.map(normalize);
+  const normalizedWinners = winnerHands.map(normalize);
+
+  return normalizedWinners.map(winner =>
+    normalizedActive.findIndex(hand => hand === winner)
+  );
+}
+
+
 class BettingRound {
-    constructor(players, actionLog, blind = null) {
+    constructor(players, actionLog, dealerIndex, blind = null) {
       this.players = players.filter(p => !p.hasFolded);  // Only active players
       this.currentBet = 0;
       this.players.forEach(player => {
@@ -19,7 +60,7 @@ class BettingRound {
       this.minBets = this.players.length;
       this.numBets = 0;
       this.pot = 0;
-      this.currentPlayerIndex = 0;
+      this.currentPlayerIndex = (dealerIndex + 1) % players.length;
       this.actionLog = actionLog;
       if (blind) {
         this.blind = blind;
@@ -37,11 +78,9 @@ class BettingRound {
 
     blindBets() {
         let player = this.getCurrentPlayer();
-        this.raise(player, this.blind);
-        this.nextPlayer();
+        this.processAction(player.name, 'raise', this.blind);
         player = this.getCurrentPlayer();
-        this.raise(player, this.blind);
-        this.nextPlayer();
+        this.processAction(player.name, 'raise', this.blind);
         this.numBets = 2;
     }
   
@@ -166,7 +205,7 @@ class ActionLog {
 class Deck {
     constructor() {
       this.suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
-      this.ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+      this.ranks = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
       this.cards = [];
   
       this.suits.forEach(suit => {
@@ -253,6 +292,7 @@ class PokerGame {
         this.deck = new Deck();
         this.deck.shuffle();
         this.blind = 5;
+        this.dealerIndex = 0;
     }
 
     startGame() {
@@ -266,53 +306,51 @@ class PokerGame {
     }
 
     checkForWinner() {
-        const activePlayers = this.players.filter(player => !player.folded);
+        const activePlayers = this.players.filter(player => !player.hasFolded);
     
         if (activePlayers.length === 1) {
-        const winner = activePlayers[0];
-        console.log(`🏆 ${winner.name} wins! Everyone else folded.`);
-        winner.chips += this.pot;
-        this.pot = 0;
-        return winner;
+          const winner = activePlayers[0];
+          console.log(`🏆 ${winner.name} wins! Everyone else folded.`);
+          winner.stack += this.pot;
+          this.pot = 0;
+          return [winner];
         }
     
         if (this.currentRound === 'Showdown') {
-        // Simple placeholder for hand strength
-        const handStrengths = activePlayers.map(player => ({
-            player,
-            strength: this.evaluateHand(player.hand.concat(this.communityCards))
-        }));
-    
-        handStrengths.sort((a, b) => b.strength - a.strength);
-    
-        const winner = handStrengths[0].player;
-        console.log(`🏆 ${winner.name} wins at showdown!`);
-        winner.chips += this.pot;
-        this.pot = 0;
-        return winner;
+          const holeCardsList = activePlayers.map(player => player.hand);
+          const fullPlayerHands = buildPlayerHands(this.communityCards, holeCardsList);
+          const evalPlayerHands = [...fullPlayerHands.map(hand => Hand.solve(hand))];
+          const winner = Hand.winners(evalPlayerHands);
+          const fullWinningHands = winner.map(w => [...w.cardPool.map(card => `${card.value}${card.suit}`)]);
+          const winnerIndexes = findWinnerIndexes(fullPlayerHands, fullWinningHands);
+          const winningPlayers = [...winnerIndexes.map(i => activePlayers[i])];
+          if (winningPlayers.length === 1) {
+            console.log(`🏆 Winner: ${winningPlayers[0].name}`);
+            console.log(`Hole cards: ${formatCards(winningPlayers[0].hand)}`);
+            console.log(`Hand: ${winner[0].descr}`)
+          } else {
+            console.log(`Tie: ${winner[0].descr}`)
+            winningPlayers.map(p => console.log(`${p.name}, ${formatCards(p.hand)}`))
+          }
+          winningPlayers.forEach(player => {player.stack += this.pot / winningPlayers.length});
+          this.pot = 0;
+          return winningPlayers;
         }
-    
+
         // No winner yet
         return null;
     }
-  
-    // Placeholder for hand evaluator - you can replace this with real poker hand logic
-    evaluateHand(cards) {
-        // Just random scoring for now
-        return Math.floor(Math.random() * 1000);
-    }
-    
 
     async startBettingRound(blind=null) {
         console.log("Betting round started!");
-        this.bettingRound = new BettingRound(this.players, this.actionLog, blind);
+        this.bettingRound = new BettingRound(this.players, this.actionLog, this.dealerIndex, blind);
         
         await this.bettingRound.waitForFinish(); // <-- REAL AWAIT now
-      
-        console.log(`Betting round finished. Pot is ${this.bettingRound.pot}`);
 
         this.nextStage();
-        this.printSummary("Alice");
+        if (this.currentRound !== "Showdown") {
+            this.printSummary("Player");
+        }
     }
 
     nextStage() {
@@ -326,7 +364,7 @@ class PokerGame {
                 this.communityCards.push(this.deck.drawCard());
                 this.startBettingRound()
             } else {
-                this.currentRound = 'End';
+                this.currentRound = 'Showdown';
             }
             break;
         case 'Flop':
@@ -335,7 +373,7 @@ class PokerGame {
                 this.communityCards.push(this.deck.drawCard());
                 this.startBettingRound()
             } else {
-                this.currentRound = 'End';
+                this.currentRound = 'Showdown';
             }
             break;
         case 'Turn':
@@ -344,23 +382,21 @@ class PokerGame {
                 this.communityCards.push(this.deck.drawCard());
                 this.startBettingRound()
             } else {
-                this.currentRound = 'End';
+                this.currentRound = 'Showdown';
             }
             break;
         case 'River':
-            if (!this.checkForWinner()) {
-                this.currentRound = 'Showdown';
-                this.checkForWinner();
-            } else {
-                this.currentRound = 'End';
-            }
+            this.currentRound = 'Showdown';
+            this.checkForWinner();
             break;
         default:
             this.checkForWinner()
             console.log('The game is over!');
             break;
         }
-        console.log(`Moving to ${this.currentRound}`);
+        if (this.currentRound !== "Showdown") {
+            console.log(`Moving to ${this.currentRound}`);
+        }
     }
 
     printSummary(playerName) {
@@ -381,6 +417,16 @@ class PokerGame {
         });
         console.log('---------------------');
     }
+
+    async playUntilEliminated() {
+    while (
+      this.players.length > 1 &&
+      this.players.find(p => p.name === "Player")?.stack > 0
+    ) {
+      await this.startGame();
+      this.players = this.players.filter(p => p.stack > 0);
+    }
+  }
 }
 
 export default PokerGame;
