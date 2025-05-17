@@ -75,18 +75,36 @@ function GamePage() {
               </div>
               <div>Stack: ${player.stack}</div>
               <div>Bet: ${player.currentBet}</div>
+
               {index === game.dealerIndex && (
                 <div className="dealer-chip">D</div>
               )}
+
+              {player.thinking && (
+                <div className="thinking-indicator">
+                  <div className="spinner" />
+                  <span>Thinking...</span>
+                </div>
+              )}
+
               <div className="hand">
-                {player.hand.map((card, i) => (
-                  <img
-                    key={i}
-                    src={getCardImage(card)}
-                    alt={`${card.rank} of ${card.suit}`}
-                    className="card-img"
-                  />
-                ))}
+                {player.showHands
+                    ? player.hand.map((card, i) => (
+                        <img
+                          key={i}
+                          src={getCardImage(card)}
+                          alt={`${card.rank} of ${card.suit}`}
+                          className="card-img"
+                        />
+                      ))
+                    : player.hand.map((_, i) => (
+                        <img
+                          key={i}
+                          src="/cards/back.png"
+                          alt="Hidden card"
+                          className="card-img"
+                        />
+                      ))}
               </div>
               {!player.hasFolded && (
                 <div className="actions-section">

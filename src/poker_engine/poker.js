@@ -106,9 +106,9 @@ class BettingRound {
 
     blindBets() {
         let player = this.getCurrentPlayer();
-        this.processAction(player.name, 'raise', this.blind);
+        this.processAction(player.name, 'raise', this.blind, true);
         player = this.getCurrentPlayer();
-        this.processAction(player.name, 'raise', this.blind);
+        this.processAction(player.name, 'raise', this.blind, true);
         this.numBets = 2;
     }
   
@@ -116,7 +116,7 @@ class BettingRound {
       return this.players[this.currentPlayerIndex];
     }
   
-    processAction(playerName, action, amount = 0) {
+    async processAction(playerName, action, amount = 0, blindForce = false) {
       const player = this.getCurrentPlayer();
       if (player.name === playerName) {
         if (this.communityCards.length === 0) {
@@ -144,6 +144,9 @@ class BettingRound {
             this._resolveFinish();
         } else {
             this.nextPlayer();
+            if (this.getCurrentPlayer().name !== 'User' && !blindForce) {
+              await this.promptAIForAction();
+            }
         }
       }
     }
@@ -219,35 +222,58 @@ class BettingRound {
       return activePlayers.length <= 1 || allCalled;
     }
 
-    async promptAIForAction() {
-      if (this.getCurrentPlayer().name === "User") {
-        // Don't do anything, waiting for user input
-        return;
-      }
+  async promptAIForAction() {
+    const player = this.getCurrentPlayer();
 
-      // Get the action history as a string
-      const historyString = this.actionLog.getActionHistoryString();
+    if (player.name === "User") {
+      return; // Wait for user input
+    }
 
-      // Compose prompt with history and possibly current hand info, pot, etc.
-      const prompt = `Poker game actions so far: ${historyString}. The current player is ${this.getCurrentPlayer().name}. What is the best action (call, raise, fold) and amount?`;
+    console.log("Prompting AI for action...");
+    player.thinking = true;
 
-      try {
-        const response = await getCohereResponse(prompt);
+    // Delay 5 seconds before attempting the prompt
+    await new Promise(resolve => setTimeout(resolve, 20000));
 
-        // Extract AI's action and amount from response.data
-        const { action, amount } = response.data;
+    let historyString = this.actionLog.getActionHistoryString(player.name);
+    historyString = '...' + historyString.slice(-100);
+    const prompt = `You're playing Texas Holdem as ${player.name}. Your hole cards: ${formatCards(player.hand)}. Moves: ${historyString}. Stacks: ${this.players.map(player => `${player.name}: $${player.stack}`).join('|')}. Recommend best move in form of (call, raise, fold) and amount.`.replace(/♠/g, 's')
+        .replace(/♥/g, 'h')
+        .replace(/♦/g, 'd')
+        .replace(/♣/g, 'c');
 
-        console.log(`AI recommends: ${action} with amount ${amount}`);
+    // Create a timeout promise (5 seconds max for API response)
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("AI response timeout")), 10000)
+    );
 
-        // Process AI action for current player
-        this.processAction(this.getCurrentPlayer().name, action, amount);
+    try {
+      // Race the AI response against the timeout
+      console.log(prompt);
+      const response = await Promise.race([
+        getCohereResponse(prompt),
+        timeoutPromise
+      ]);
 
-      } catch (error) {
-        console.error('Failed to get AI action:', error);
-        // Fallback - maybe fold or call?
-        this.processAction(this.getCurrentPlayer().name, 'fold', 0);
+      const { action, amount } = JSON.parse(response.data.message.content[0].text);
+      console.log(`AI recommends: ${action} with amount ${amount}`);
+
+      player.thinking = false;
+      await this.processAction(player.name, action, amount);
+
+    } catch (error) {
+      console.error('AI action failed or timed out:', error);
+
+      // Fallback: fold
+      player.thinking = false;
+      if (Math.random() > 0.5) {
+        await this.processAction(player.name, 'fold', 0);
+      } else {
+        await this.processAction(player.name, 'call', 0);
       }
     }
+  }
+
 }
   
 class ActionLog {
@@ -295,10 +321,15 @@ class ActionLog {
       });
     }
 
-    getActionHistoryString() {
-      return this.actions
-        .map(a => `${a.playerName} ${a.action} ${a.amount > 0 ? '$' + a.amount : ''} (${a.descr || ''})`)
+    getActionHistoryString(currentName) {
+      let historyString = this.actions
+        .map(a => `${a.playerName} ${a.action} ${a.amount > 0 ? '$' + a.amount : ''} ${a.action.includes("deal")?a.descr:''}`)
         .join(', ');
+      historyString = historyString.replace(/♠/g, 's')
+        .replace(/♥/g, 'h')
+        .replace(/♦/g, 'd')
+        .replace(/♣/g, 'c');
+      return historyString;
     }
 }
   
@@ -349,6 +380,8 @@ class Player {
       this.currentBet = 0;
       this.hasFolded = false;
       this.hand = [];
+      this.thinking = false;
+      this.showHands = false;
     }
   
     makeMove(action, amount = 0) {  
@@ -401,11 +434,16 @@ class PokerGame {
         this.deck.shuffle();
     }
 
-    checkForWinner() {
+    async checkForWinner() {
         const activePlayers = this.players.filter(player => !player.hasFolded);
         if (activePlayers.length === 1) {
           const winner = activePlayers[0];
           console.log(`🏆 ${winner.name} wins! Everyone else folded.`);
+          // Delay 5 seconds before moving to next round
+          this.winMessage = `🏆 ${winner.name} wins! Everyone else folded.`;
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          this.winMessage = "";
+
           this.actionLog.addWinner(activePlayers, activePlayers, this.pot, this.communityCards);
           winner.stack += this.pot;
           this.pot = 0;
@@ -424,9 +462,21 @@ class PokerGame {
             console.log(`🏆 Winner: ${winningPlayers[0].name}`);
             console.log(`Hole cards: ${formatCards(winningPlayers[0].hand)}`);
             console.log(`Hand: ${winner[0].descr}`)
+            // Delay 5 seconds before moving to next round
+            this.winMessage = `🏆 Winner: ${winningPlayers[0].name} with hand ${winner[0].descr}`;
+            activePlayers.forEach(p => {p.showHands = true;});
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            this.winMessage = "";
+            activePlayers.forEach(p => {p.showHands = false;});
           } else {
             console.log(`Tie: ${winner[0].descr}`)
             winningPlayers.map(p => console.log(`${p.name}, ${formatCards(p.hand)}`))
+            // Delay 5 seconds before moving to next round
+            this.winMessage = `🏆 Tie: ${winningPlayers.map(p => p.name).join(", ")} with hand ${winner[0].descr}.`;
+            activePlayers.forEach(p => {p.showHands = true;});
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            this.winMessage = "";
+            activePlayers.forEach(p => {p.showHands = false;});
           }
           this.actionLog.addWinner(activePlayers, winningPlayers, this.pot, this.communityCards);
 
@@ -442,6 +492,7 @@ class PokerGame {
     async startBettingRound(blind=null) {
         console.log("Betting round started!");
         this.bettingRound = new BettingRound(this.players, this.communityCards, this.actionLog, this.dealerIndex, blind);
+        await this.bettingRound.promptAIForAction();
         await this.bettingRound.waitForFinish(); // <-- REAL AWAIT now
     }
 
@@ -501,11 +552,15 @@ class PokerGame {
             player.receiveCard(this.deck.drawCard());
             player.receiveCard(this.deck.drawCard());
         });
+        this.players.find(p => p.name === "User").showHands = true;
         await this.startBettingRound(this.blind);
         this.nextStage();
-        while (!this.checkForWinner()) {
+        let foundWinner = null;
+        foundWinner = await this.checkForWinner();
+        while (!foundWinner) {
             await this.startBettingRound();
             this.nextStage();
+            foundWinner = await this.checkForWinner();
         }
         this.printSummary("User");
     }
