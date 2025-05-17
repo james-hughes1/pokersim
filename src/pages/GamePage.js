@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './GamePage.css';
 import PokerGame from "../poker_engine/poker.js";
 
-const game = new PokerGame(["User", "Bot1", "Bot2"]);
+const game = new PokerGame(["User", "Robo-Rob", "Electric Elle", "Cyber Steve"]);
 game.playUntilEliminated();
 
 function GamePage() {
@@ -106,10 +106,10 @@ function GamePage() {
                         />
                       ))}
               </div>
-              {!player.hasFolded && (
+              {!player.hasFolded && player.name === "User" && (
                 <div className="actions-section">
                   <button onClick={() => handleAction(index, 'fold')}>Fold</button>
-                  <button onClick={() => handleAction(index, 'call')}>Call</button>
+                  <button onClick={() => handleAction(index, 'call')}>Check/Call</button>
                   <button onClick={() => handleAction(index, 'raise')}>Raise</button>
                   <div className="slider-container">
                     Raise Amount: ${sliderValues[index]}

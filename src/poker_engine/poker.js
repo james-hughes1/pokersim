@@ -422,7 +422,7 @@ class PokerGame {
         this.resetGame();
         this.actionLog = new ActionLog();
         this.blind = 5;
-        this.dealerIndex = 0;
+        this.dealerIndex = 1;
         this.winMessage = "";
     }
 
