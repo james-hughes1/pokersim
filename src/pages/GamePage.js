@@ -1,136 +1,122 @@
 import React, { useState, useEffect } from 'react';
-import { getCohereResponse } from '../services/cohereApi';
-import "./GamePage.css";
+import './GamePage.css';
 import PokerGame from "../poker_engine/poker.js";
 
-const initialPlayers = [
-  { name: "Player" },
-  { name: "Bob" },
-  { name: "Charlie" },
-  { name: "Diana" },
-  { name: "Eve" },
-];
+const game = new PokerGame(["User", "Bot1", "Bot2"]);
+game.playUntilEliminated();
 
-const game = new PokerGame(initialPlayers.map(player=>player.name));
+function GamePage() {
+  const [players, setPlayers] = useState(game.players);
+  const [sliderValues, setSliderValues] = useState(players.map(() => 10));
+  const [currentPlayer, setCurrentPlayer] = useState(game.bettingRound.currentPlayer);
+  const [communityCards, setCommunityCards] = useState(game.communityCards || []);
+  const [winMessage, setWinMessage] = useState("");
 
-const GamePage = () => {
+  // Sync UI with the current game state on component mount
+  useEffect(() => {
+  const interval = setInterval(() => {
+    setPlayers([...game.players]);
+    setCommunityCards([...game.communityCards || []]);
+    setCurrentPlayer(game.bettingRound.currentPlayer);
+    setWinMessage(game.winMessage);
+  }, 200);
 
-  // useEffect(() => {
-  //   // Only call ONCE when the page loads
-  //   handleGenerate(
-  //     "Produce a JSON that details the actions of a poker player. Here is the history of the current game so far, with the context that this player is 3rd out of 5 players. First round bets: 5, 10, 10, 10, 10, you get A club 2 diamond, community cards are A spades 3 spades, bets 10 fold, now it's your turn."
-  //   );
-  // }, []); // ← empty dependency array = run only ONCE after mount
+  return () => clearInterval(interval);
+}, []);
 
-  // useEffect(() => {
-  //   console.log(move);
-  // }, [move]); // ← log when move changes
+  const getCardImage = (card) => {
+    const rank = card.rank;
+    const suit = card.suit[0].toLowerCase(); // S, H, D, C
+    return `/cards/${rank}${suit}.png`;
+  };
 
-  const [, updateState] = useState(0);  // <- create dummy state
-  const forceUpdate = () => updateState(n => n + 1);  // <- define forceUpdate
-  const [raiseAmounts, setRaiseAmounts] = useState(
-    initialPlayers.map(() => 0)
-  );
+  const handleAction = (PlayerName, action) => {
+    const player = players[PlayerName];
+    const raiseAmount = sliderValues[PlayerName];
+    game.bettingRound.processAction(player.name, action, raiseAmount);
 
-  const handleAction = (playerName, action, amount = 0) => {
-    game.bettingRound.processAction(playerName, action, amount);
-    forceUpdate(n => n + 1); // Re-render after each move
+    // Update state to reflect game changes
+    setPlayers([...game.players]);
+    setCurrentPlayer(game.bettingRound.currentPlayer);
+    setCommunityCards([...game.communityCards || []]);
   };
 
   const handleSliderChange = (index, value) => {
-    const updated = [...raiseAmounts];
-    updated[index] = parseInt(value, 10);
-    setRaiseAmounts(updated);
-  };
-
-  const [move, setMove] = useState(null);
-  const handleGenerate = async (prompt) => {
-    if (!prompt.trim()) return; // Don't proceed if the prompt is empty
-
-    try {
-      // Call the getCohereResponse function from the service
-      const response = await getCohereResponse(prompt);
-      // Set the generated response
-      const textObject = response.data.message.content[0];
-      const parsedMove = JSON.parse(textObject.text);
-
-      setMove(parsedMove);
-    } catch (error) {
-      console.error('Error generating text:', error);
-    }
+    const newSliders = [...sliderValues];
+    newSliders[index] = value;
+    setSliderValues(newSliders);
   };
 
   return (
-    <div className="game-container">
-      <h1 className="game-title">Poker Game</h1>
-
-      <div className="players-container">
-        {game.players.map((player, index) => (
-          <div key={index} className="player-card">
-            <h3>{player.name}</h3>
-            <p>Stack: {player.stack}</p>
-            <p>Current Bet: {player.currentBet}</p>
-            <p>Status: {player.folded ? "Folded" : "Active"}</p>
-
-            <div className="actions">
-              <button
-                disabled={player.folded}
-                onClick={() => handleAction(player.name, "call")}
-              >
-                Call
-              </button>
-              <button
-                disabled={player.folded}
-                onClick={() => handleAction(player.name, "fold")}
-              >
-                Fold
-              </button>
-              <button
-                disabled={player.folded || raiseAmounts[index] <= 0}
-                onClick={() => handleAction(player.name, "raise", raiseAmounts[index])}
-              >
-                Raise
-              </button>
-            </div>
-
-            <input
-              type="range"
-              min="0"
-              max={player.stack}
-              value={raiseAmounts[index]}
-              onChange={(e) => handleSliderChange(index, e.target.value)}
-              disabled={player.folded}
-            />
-            <div>Raise Amount: {raiseAmounts[index]}</div>
-          </div>
+    <div className="table-container">
+      <div className="community-cards">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <img
+            key={i}
+            src={
+              communityCards[i]
+                ? getCardImage(communityCards[i])
+                : '/cards/back.png'
+            }
+            alt={`Community card ${i + 1}`}
+            className="card-img"
+          />
         ))}
       </div>
+
+      <div className="players-wrapper">
+        {players.map((player, index) => {
+          const isTurn = currentPlayer && currentPlayer.name === player.name;
+          return (
+            <div className={`player-card ${player.hasFolded ? 'folded' : ''}`} key={index}>
+              <div className="player-header">
+                {isTurn && <span className="arrow">➡️</span>}
+                <span className="player-name">{player.name}</span>
+              </div>
+              <div>Stack: ${player.stack}</div>
+              <div>Bet: ${player.currentBet}</div>
+              {index === game.dealerIndex && (
+                <div className="dealer-chip">D</div>
+              )}
+              <div className="hand">
+                {player.hand.map((card, i) => (
+                  <img
+                    key={i}
+                    src={getCardImage(card)}
+                    alt={`${card.rank} of ${card.suit}`}
+                    className="card-img"
+                  />
+                ))}
+              </div>
+              {!player.hasFolded && (
+                <div className="actions-section">
+                  <button onClick={() => handleAction(index, 'fold')}>Fold</button>
+                  <button onClick={() => handleAction(index, 'call')}>Call</button>
+                  <button onClick={() => handleAction(index, 'raise')}>Raise</button>
+                  <div className="slider-container">
+                    Raise Amount: ${sliderValues[index]}
+                    <input
+                      type="range"
+                      min="5"
+                      max={player.stack}
+                      value={sliderValues[index]}
+                      onChange={(e) => handleSliderChange(index, Number(e.target.value))}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {/* Display the win message if it exists */}
+      {winMessage && (
+        <div className="win-message">
+          {winMessage}
+        </div>
+      )}
     </div>
   );
-};
+}
 
 export default GamePage;
-
-game.playUntilEliminated();
-
-// useEffect(() => {
-//   const playUntilEliminated = async () => {
-//     while (
-//       game.players.length > 1 &&
-//       game.players.find(p => p.name === "Player")?.stack > 0
-//     ) {
-//       await game.startGame(); // must return a Promise
-//       game.players = game.players.filter(p => p.stack > 0);
-//       forceUpdate(n => n + 1); // update UI after each game
-//     }
-
-//     // Optional: alert or message
-//     if (game.players.length === 1) {
-//       alert(`${game.players[0].name} is the winner!`);
-//     } else {
-//       alert("You're out of chips!");
-//     }
-//   };
-
-//   playUntilEliminated(); // run on mount
-// }, []);

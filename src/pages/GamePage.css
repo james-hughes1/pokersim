@@ -1,41 +1,97 @@
-.game-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    background-color: #f4f4f9;
-  }
-  
-  .game-title {
-    font-size: 2.5rem;
-    font-weight: bold;
-    color: #333;
-    margin-bottom: 20px;
-  }
-  
-  .game-description {
-    font-size: 1.2rem;
-    color: #555;
-    margin-bottom: 20px;
-  }
-  
-  .action-buttons {
-    display: flex;
-    gap: 20px;
-  }
-  
-  .action-button {
-    padding: 10px 20px;
-    background-color: #28a745;
-    color: white;
-    font-size: 1rem;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-  }
-  
-  .action-button:hover {
-    background-color: #218838;
-  }
-  
+.table-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+}
+
+.community-cards {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.card-img {
+  width: 60px;
+  height: auto;
+  margin: 0 4px;
+}
+
+.players-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 20px;
+}
+
+.player-card {
+  position: relative;         /* Dealer chip will now position correctly */
+  border: 1px solid #ccc;
+  padding: 12px;
+  width: 220px;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  text-align: center;
+}
+
+.player-card.folded {
+  background-color: #eee;
+  opacity: 0.6;
+}
+
+.player-header {
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.arrow {
+  margin-right: 6px;
+  color: green;
+}
+
+.hand {
+  margin: 8px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.actions-section {
+  margin-top: 10px;
+}
+
+.actions-section button {
+  margin: 4px;
+  padding: 4px 10px;
+}
+
+.slider-container {
+  margin-top: 8px;
+}
+
+.dealer-chip {
+  background-color: gold;
+  color: black;
+  border-radius: 50%;
+  padding: 4px 8px;
+  font-weight: bold;
+  font-size: 0.8rem;
+  position: absolute;
+  top: -10px;
+  left: -10px;
+}
+
+.win-message {
+  position: fixed;          /* So it stays visible on screen */
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #3e75ee;  /* Green background for win */
+  color: white;
+  padding: 15px 30px;
+  border-radius: 8px;
+  font-size: 1.5rem;
+  font-weight: bold;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  z-index: 1000;            /* On top of other elements */
+  user-select: none;
+}

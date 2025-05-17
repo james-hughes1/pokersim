@@ -1,3 +1,5 @@
+import { getCohereResponse } from '../services/cohereApi.js';
+
 var Hand = require('pokersolver').Hand;
 
 function formatCards(cards) {
@@ -49,10 +51,31 @@ function findWinnerIndexes(activeHands, winnerHands) {
   );
 }
 
+  // useEffect(() => {
+  //   // Only call ONCE when the page loads
+  //   handleGenerate(
+  //     "Produce a JSON that details the actions of a poker player. Here is the history of the current game so far, with the context that this player is 3rd out of 5 players. First round bets: 5, 10, 10, 10, 10, you get A club 2 diamond, community cards are A spades 3 spades, bets 10 fold, now it's your turn."
+  //   );
+  // }, []); // ← empty dependency array = run only ONCE after mount
+
+  // useEffect(() => {
+  //   console.log(move);
+  // }, [move]); // ← log when move changes
+
 
 class BettingRound {
     constructor(players, communityCards, actionLog, dealerIndex, blind = null) {
       this.players = players.filter(p => !p.hasFolded);  // Only active players
+
+      // Figure out who goes first after dealer (people may have folded)
+      let allPlayerIndex = (dealerIndex + 1) % players.length;
+      this.currentPlayer = players[allPlayerIndex];
+      this.currentPlayerIndex = this.players.findIndex(p => p.name === this.currentPlayer.name);
+      while (this.currentPlayerIndex === -1) {
+        allPlayerIndex = (allPlayerIndex + 1) % players.length;
+        this.currentPlayer = players[allPlayerIndex];
+        this.currentPlayerIndex = this.players.findIndex(p => p.name === this.currentPlayer.name);
+      }
       this.communityCards = communityCards;
       this.currentBet = 0;
       this.players.forEach(player => {
@@ -61,16 +84,20 @@ class BettingRound {
       this.minBets = this.players.length;
       this.numBets = 0;
       this.pot = 0;
-      this.currentPlayerIndex = (dealerIndex + 1) % players.length;
       this.actionLog = actionLog;
       if (blind) {
         this.blind = blind;
         this.blindBets();
       }
       // Setup a Promise
-        this.finishPromise = new Promise((resolve) => {
+      this.finishPromise = new Promise((resolve) => {
         this._resolveFinish = resolve; // Save resolver function
       });
+
+      // If all-in, skip
+      if (this.players.every(player => player.stack === 0)) {
+        this._resolveFinish();
+      }
     }
 
     async waitForFinish() {
@@ -107,15 +134,16 @@ class BettingRound {
             // Assume fold otherwise
             this.fold(player);
             this.currentPlayerIndex = (this.currentPlayerIndex - 1) % this.players.length;
+            this.currentPlayer = this.players[this.currentPlayerIndex];
         }
-        this.numBets += 1;
 
+        this.numBets += 1;
         if (this.isRoundOver()) {
             console.log(`Betting round finished. Pot is ${this.pot}`);
             this.actionLog.addToPot(this.pot);
             this._resolveFinish();
         } else {
-        this.nextPlayer();
+            this.nextPlayer();
         }
       }
     }
@@ -144,20 +172,37 @@ class BettingRound {
       const totalAmount = (this.currentBet - player.currentBet) + amount;
   
       if (player.stack < totalAmount) {
-        console.log(`${player.name} doesn't have enough to raise!`);
-        return;
+        if (player.stack === 0) {
+          console.log(`${player.name} still all in.`)
+          player.makeMove('call', 0);
+        } else {
+          // Not enough to match the bet
+          if (player.stack < this.currentBet - player.currentBet) {
+            player.makeMove('call', this.currentBet - player.currentBet);
+            this.pot += this.currentBet - player.currentBet;
+            console.log(`${player.name} all in.`);
+          } else {
+            // Enough to match but not fully make the stated raise
+            const raiseAmount = player.stack - (this.currentBet - player.currentBet);
+            player.makeMove('raise', player.stack);
+            this.pot += player.stack;
+            this.currentBet = player.currentBet;
+            console.log(`${player.name} raises by ${raiseAmount} to go all-in, total bet is now ${this.currentBet}`);
+          }
+        }
+      } else {
+        player.makeMove('raise', totalAmount);
+        this.pot += totalAmount;
+        this.currentBet = player.currentBet;
+        console.log(`${player.name} raises by ${amount}, total bet is now ${this.currentBet}`);
       }
-  
-      player.makeMove('raise', totalAmount);
-      this.pot += totalAmount;
-      this.currentBet = player.currentBet;
-      console.log(`${player.name} raises by ${amount}, total bet is now ${this.currentBet}`);
     }
   
     nextPlayer() {
       do {
         this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.players.length;
       } while (this.players[this.currentPlayerIndex].hasFolded);
+      this.currentPlayer = this.players[this.currentPlayerIndex];
   
       // NOTE: Don't automatically do anything after this.
       // Wait for UI to call processAction() next!
@@ -169,10 +214,41 @@ class BettingRound {
   
     isRoundOver() {
       const activePlayers = this.players.filter(p => !p.hasFolded);
-      const allCalled = activePlayers.every(p => p.currentBet === this.currentBet) && (this.numBets >= this.minBets);
+      const nonAllInPlayers = activePlayers.filter(p => p.stack > 0);  // players who still have chips
+      const allCalled = nonAllInPlayers.every(p => p.currentBet === this.currentBet) && (this.numBets >= this.minBets);
       return activePlayers.length <= 1 || allCalled;
     }
-  }
+
+    async promptAIForAction() {
+      if (this.getCurrentPlayer().name === "User") {
+        // Don't do anything, waiting for user input
+        return;
+      }
+
+      // Get the action history as a string
+      const historyString = this.actionLog.getActionHistoryString();
+
+      // Compose prompt with history and possibly current hand info, pot, etc.
+      const prompt = `Poker game actions so far: ${historyString}. The current player is ${this.getCurrentPlayer().name}. What is the best action (call, raise, fold) and amount?`;
+
+      try {
+        const response = await getCohereResponse(prompt);
+
+        // Extract AI's action and amount from response.data
+        const { action, amount } = response.data;
+
+        console.log(`AI recommends: ${action} with amount ${amount}`);
+
+        // Process AI action for current player
+        this.processAction(this.getCurrentPlayer().name, action, amount);
+
+      } catch (error) {
+        console.error('Failed to get AI action:', error);
+        // Fallback - maybe fold or call?
+        this.processAction(this.getCurrentPlayer().name, 'fold', 0);
+      }
+    }
+}
   
 class ActionLog {
     constructor() {
@@ -192,7 +268,7 @@ class ActionLog {
           var amount;
           if (winningPlayers.includes(player)) {
             action = "win";
-            amount = pot / winningPlayers.length
+            amount = Math.floor(pot / winningPlayers.length);
           } else {
             action = "lose";
             amount = player.currentBet;
@@ -212,12 +288,17 @@ class ActionLog {
       return this.actions;
     }
 
-    // Optional: Method to print the action log to the console
     printActions() {
       console.log("Action Log:");
       this.actions.forEach(action => {
         console.log(`${action.playerName} ${action.action} ${action.amount} ${action.descr}`);
       });
+    }
+
+    getActionHistoryString() {
+      return this.actions
+        .map(a => `${a.playerName} ${a.action} ${a.amount > 0 ? '$' + a.amount : ''} (${a.descr || ''})`)
+        .join(', ');
     }
 }
   
@@ -309,6 +390,7 @@ class PokerGame {
         this.actionLog = new ActionLog();
         this.blind = 5;
         this.dealerIndex = 0;
+        this.winMessage = "";
     }
 
     resetGame() {
@@ -348,7 +430,7 @@ class PokerGame {
           }
           this.actionLog.addWinner(activePlayers, winningPlayers, this.pot, this.communityCards);
 
-          winningPlayers.forEach(player => {player.stack += this.pot / winningPlayers.length});
+          winningPlayers.forEach(player => {player.stack += Math.floor(this.pot / winningPlayers.length)});
           this.pot = 0;
           return winningPlayers;
         }
@@ -371,20 +453,20 @@ class PokerGame {
             this.communityCards.push(this.deck.drawCard());
             this.communityCards.push(this.deck.drawCard());
             this.communityCards.push(this.deck.drawCard());
-            this.printSummary("Player");
-            this.actionLog.addAction(this.players[this.dealerIndex], this.currentRound, 0, formatCards(this.communityCards));
+            this.printSummary("User");
+            this.actionLog.addAction(this.players[this.dealerIndex].name, `deal-${this.currentRound}`, 0, formatCards(this.communityCards));
             break;
         case 'Flop':
             this.currentRound = 'Turn';
             this.communityCards.push(this.deck.drawCard());
-            this.printSummary("Player");
-            this.actionLog.addAction(this.players[this.dealerIndex], this.currentRound, 0, formatCards(this.communityCards));
+            this.printSummary("User");
+            this.actionLog.addAction(this.players[this.dealerIndex].name, `deal-${this.currentRound}`, 0, formatCards(this.communityCards));
             break;
         case 'Turn':
             this.currentRound = 'River';
             this.communityCards.push(this.deck.drawCard());
-            this.printSummary("Player");
-            this.actionLog.addAction(this.players[this.dealerIndex], this.currentRound, 0, formatCards(this.communityCards));
+            this.printSummary("User");
+            this.actionLog.addAction(this.players[this.dealerIndex].name, `deal-${this.currentRound}`, 0, formatCards(this.communityCards));
             break;
         case 'River':
             this.currentRound = 'Showdown';
@@ -425,11 +507,11 @@ class PokerGame {
             await this.startBettingRound();
             this.nextStage();
         }
-        this.printSummary("Player");
+        this.printSummary("User");
     }
 
     checkEnded () {
-        if (!this.players.some(p => p.name === "Player")) {
+        if (!this.players.some(p => p.name === "User")) {
             return "lose";
         } else {
             if (this.players.length === 1) {
@@ -451,6 +533,16 @@ class PokerGame {
           this.resetGame();
           this.players.forEach(player => player.resetForNextRound());
         }
+      switch (this.checkEnded()) {
+        case "win":
+          this.winMessage = "Congratulations you win!"
+          break;
+        case "lose":
+          this.winMessage = "Uh-oh you lose!"
+          break;
+        default:
+          break;
+      }
     }
 
 }
