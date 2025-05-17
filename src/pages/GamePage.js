@@ -111,4 +111,26 @@ const GamePage = () => {
 
 export default GamePage;
 
-game.startGame();
+game.playUntilEliminated();
+
+// useEffect(() => {
+//   const playUntilEliminated = async () => {
+//     while (
+//       game.players.length > 1 &&
+//       game.players.find(p => p.name === "Player")?.stack > 0
+//     ) {
+//       await game.startGame(); // must return a Promise
+//       game.players = game.players.filter(p => p.stack > 0);
+//       forceUpdate(n => n + 1); // update UI after each game
+//     }
+
+//     // Optional: alert or message
+//     if (game.players.length === 1) {
+//       alert(`${game.players[0].name} is the winner!`);
+//     } else {
+//       alert("You're out of chips!");
+//     }
+//   };
+
+//   playUntilEliminated(); // run on mount
+// }, []);

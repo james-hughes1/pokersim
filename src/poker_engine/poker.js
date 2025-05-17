@@ -51,8 +51,9 @@ function findWinnerIndexes(activeHands, winnerHands) {
 
 
 class BettingRound {
-    constructor(players, actionLog, dealerIndex, blind = null) {
+    constructor(players, communityCards, actionLog, dealerIndex, blind = null) {
       this.players = players.filter(p => !p.hasFolded);  // Only active players
+      this.communityCards = communityCards;
       this.currentBet = 0;
       this.players.forEach(player => {
         player.currentBet = 0;
@@ -91,7 +92,13 @@ class BettingRound {
     processAction(playerName, action, amount = 0) {
       const player = this.getCurrentPlayer();
       if (player.name === playerName) {
-        this.actionLog.addAction(player.name,action,amount);
+        if (this.communityCards.length === 0) {
+          this.actionLog.addAction(player.name,action,amount,formatCards(player.hand));
+        } else {
+          const fullPlayerHand = buildPlayerHands(this.communityCards, [player.hand])[0];
+          const descr = Hand.solve(fullPlayerHand).descr;
+          this.actionLog.addAction(player.name,action,amount,descr);
+        }
         if (action === 'call') {
             this.call(player);
         } else if (action === 'raise') {
@@ -174,9 +181,26 @@ class ActionLog {
     }
   
     // Method to add a new action
-    addAction(player, action, amount) {
-      const actionData = { player, action, amount };
+    addAction(playerName, action, amount, descr) {
+      const actionData = { playerName, action, amount, descr};
       this.actions.push(actionData);
+    }
+
+    addWinner(activePlayers, winningPlayers, pot, communityCards) {
+        for (const player of activePlayers) {
+          var action;
+          var amount;
+          if (winningPlayers.includes(player)) {
+            action = "win";
+            amount = pot / winningPlayers.length
+          } else {
+            action = "lose";
+            amount = player.currentBet;
+          }
+          const fullPlayerHand = buildPlayerHands(communityCards, [player.hand])[0];
+          const descr = Hand.solve(fullPlayerHand).descr;
+          this.addAction(player.name, action, amount, descr);
+        }
     }
 
     addToPot(amount) {
@@ -192,11 +216,7 @@ class ActionLog {
     printActions() {
       console.log("Action Log:");
       this.actions.forEach(action => {
-        if (action.action === "raise") {
-            console.log(`${action.player} ${action.action} ${action.amount}`);
-        } else {
-            console.log(`${action.player} ${action.action}`);
-        }
+        console.log(`${action.playerName} ${action.action} ${action.amount} ${action.descr}`);
       });
     }
 }
@@ -229,6 +249,15 @@ class Deck {
         [this.cards[i], this.cards[j]] = [this.cards[j], this.cards[i]];
       }
     }
+
+    reset() {
+      this.cards = [];
+      this.suits.forEach(suit => {
+        this.ranks.forEach(rank => {
+          this.cards.push({ rank, suit });
+        });
+      });
+    }
 }
 
 
@@ -241,29 +270,20 @@ class Player {
       this.hand = [];
     }
   
-    makeMove(action, amount = 0) {
-      if (this.hasFolded) {
-        console.log(`${this.name} has already folded.`);
-        return;
-      }
-  
+    makeMove(action, amount = 0) {  
       switch (action.toLowerCase()) {
         case 'fold':
           this.hasFolded = true;
-          console.log(`${this.name} folds.`);
           break;
         case 'call':
           this.currentBet += amount;
           this.stack -= amount;
-          console.log(`${this.name} calls ${amount}.`);
           break;
         case 'raise':
           this.currentBet += amount;
           this.stack -= amount;
-          console.log(`${this.name} raises ${amount}.`);
           break;
         case 'check':
-          console.log(`${this.name} checks.`);
           break;
         default:
           console.log(`Invalid move: ${action}`);
@@ -285,32 +305,26 @@ class Player {
 class PokerGame {
     constructor(playerNames) {
         this.players = playerNames.map(name => new Player(name));
-        this.pot = 0;
-        this.communityCards = []; // Not handling cards yet
-        this.currentRound = 'Pre-Flop';
+        this.resetGame();
         this.actionLog = new ActionLog();
-        this.deck = new Deck();
-        this.deck.shuffle();
         this.blind = 5;
         this.dealerIndex = 0;
     }
 
-    startGame() {
-        console.log(`Starting ${this.currentRound}...`);
-        this.players.forEach(player => player.resetForNextRound());
-        this.players.forEach(player => {
-            player.receiveCard(this.deck.drawCard());
-            player.receiveCard(this.deck.drawCard());
-        });
-        this.startBettingRound(this.blind)
+    resetGame() {
+        this.pot = 0;
+        this.communityCards = []; // Not handling cards yet
+        this.currentRound = 'Pre-Flop';
+        this.deck = new Deck();
+        this.deck.shuffle();
     }
 
     checkForWinner() {
         const activePlayers = this.players.filter(player => !player.hasFolded);
-    
         if (activePlayers.length === 1) {
           const winner = activePlayers[0];
           console.log(`🏆 ${winner.name} wins! Everyone else folded.`);
+          this.actionLog.addWinner(activePlayers, activePlayers, this.pot, this.communityCards);
           winner.stack += this.pot;
           this.pot = 0;
           return [winner];
@@ -332,6 +346,8 @@ class PokerGame {
             console.log(`Tie: ${winner[0].descr}`)
             winningPlayers.map(p => console.log(`${p.name}, ${formatCards(p.hand)}`))
           }
+          this.actionLog.addWinner(activePlayers, winningPlayers, this.pot, this.communityCards);
+
           winningPlayers.forEach(player => {player.stack += this.pot / winningPlayers.length});
           this.pot = 0;
           return winningPlayers;
@@ -343,59 +359,39 @@ class PokerGame {
 
     async startBettingRound(blind=null) {
         console.log("Betting round started!");
-        this.bettingRound = new BettingRound(this.players, this.actionLog, this.dealerIndex, blind);
-        
+        this.bettingRound = new BettingRound(this.players, this.communityCards, this.actionLog, this.dealerIndex, blind);
         await this.bettingRound.waitForFinish(); // <-- REAL AWAIT now
-
-        this.nextStage();
-        if (this.currentRound !== "Showdown") {
-            this.printSummary("Player");
-        }
     }
 
     nextStage() {
         this.pot = this.actionLog.pot;
         switch (this.currentRound) {
         case 'Pre-Flop':
-            if (!this.checkForWinner()) {
-                this.currentRound = 'Flop';
-                this.communityCards.push(this.deck.drawCard());
-                this.communityCards.push(this.deck.drawCard());
-                this.communityCards.push(this.deck.drawCard());
-                this.startBettingRound()
-            } else {
-                this.currentRound = 'Showdown';
-            }
+            this.currentRound = 'Flop';
+            this.communityCards.push(this.deck.drawCard());
+            this.communityCards.push(this.deck.drawCard());
+            this.communityCards.push(this.deck.drawCard());
+            this.printSummary("Player");
+            this.actionLog.addAction(this.players[this.dealerIndex], this.currentRound, 0, formatCards(this.communityCards));
             break;
         case 'Flop':
-            if (!this.checkForWinner()) {
-                this.currentRound = 'Turn';
-                this.communityCards.push(this.deck.drawCard());
-                this.startBettingRound()
-            } else {
-                this.currentRound = 'Showdown';
-            }
+            this.currentRound = 'Turn';
+            this.communityCards.push(this.deck.drawCard());
+            this.printSummary("Player");
+            this.actionLog.addAction(this.players[this.dealerIndex], this.currentRound, 0, formatCards(this.communityCards));
             break;
         case 'Turn':
-            if (!this.checkForWinner()) {
-                this.currentRound = 'River';
-                this.communityCards.push(this.deck.drawCard());
-                this.startBettingRound()
-            } else {
-                this.currentRound = 'Showdown';
-            }
+            this.currentRound = 'River';
+            this.communityCards.push(this.deck.drawCard());
+            this.printSummary("Player");
+            this.actionLog.addAction(this.players[this.dealerIndex], this.currentRound, 0, formatCards(this.communityCards));
             break;
         case 'River':
             this.currentRound = 'Showdown';
-            this.checkForWinner();
             break;
         default:
-            this.checkForWinner()
             console.log('The game is over!');
             break;
-        }
-        if (this.currentRound !== "Showdown") {
-            console.log(`Moving to ${this.currentRound}`);
         }
     }
 
@@ -410,7 +406,6 @@ class PokerGame {
         console.log(`Pot: $${this.pot}`);
         console.log('Community cards:', formatCards(this.communityCards));
         console.log(`${player.name}'s hand:`, formatCards(player.hand));
-        this.actionLog.printActions()
         console.log('Player Stacks:');
         this.players.forEach(player => {
         console.log(`${player.name}: $${player.stack} ${player.hasFolded ? '(Folded)' : ''}`);
@@ -418,15 +413,46 @@ class PokerGame {
         console.log('---------------------');
     }
 
-    async playUntilEliminated() {
-    while (
-      this.players.length > 1 &&
-      this.players.find(p => p.name === "Player")?.stack > 0
-    ) {
-      await this.startGame();
-      this.players = this.players.filter(p => p.stack > 0);
+    async playMatch() {
+        console.log("Dealing new cards...");
+        this.players.forEach(player => {
+            player.receiveCard(this.deck.drawCard());
+            player.receiveCard(this.deck.drawCard());
+        });
+        await this.startBettingRound(this.blind);
+        this.nextStage();
+        while (!this.checkForWinner()) {
+            await this.startBettingRound();
+            this.nextStage();
+        }
+        this.printSummary("Player");
     }
-  }
+
+    checkEnded () {
+        if (!this.players.some(p => p.name === "Player")) {
+            return "lose";
+        } else {
+            if (this.players.length === 1) {
+                return "win";
+            } else {
+                return null;
+            }
+        }
+    }
+
+    async playUntilEliminated () {
+        while (
+          !this.checkEnded()
+        ) {
+          await this.playMatch();
+          this.actionLog.printActions();
+          this.players = this.players.filter(p => p.stack > 0);
+          this.dealerIndex = (this.dealerIndex + 1) % this.players.length;
+          this.resetGame();
+          this.players.forEach(player => player.resetForNextRound());
+        }
+    }
+
 }
 
 export default PokerGame;
