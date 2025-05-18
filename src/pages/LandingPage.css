@@ -3,41 +3,74 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 2rem;
   height: 100vh;
-  background-color: #f4f4f9;
+  background: linear-gradient(145deg, #0f2027, #203a43, #2c5364);
+  color: #fff;
+  text-align: center;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.poker-chip {
+  width: 100px;
+  height: auto;
+  margin-bottom: 20px;
+  animation: spin 6s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .landing-title {
-  font-size: 3rem;
-  font-weight: bold;
-  color: #333;
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
 }
 
 .landing-description {
   font-size: 1.2rem;
-  color: #555;
-  margin-bottom: 20px;
+  margin-bottom: 2rem;
 }
 
 .name-input {
-  padding: 10px;
-  margin-bottom: 20px;
-  width: 200px;
+  padding: 0.75rem 1rem;
   font-size: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 5px;
+  border: none;
+  border-radius: 8px;
+  width: 80%;
+  max-width: 300px;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 0 10px rgba(0,0,0,0.2);
 }
 
 .start-button {
-  padding: 10px 20px;
-  background-color: #007bff;
-  color: white;
-  font-size: 1rem;
+  padding: 0.75rem 2rem;
+  font-size: 1.1rem;
   border: none;
-  border-radius: 5px;
+  border-radius: 8px;
+  background: #ff5252;
+  color: white;
   cursor: pointer;
+  transition: background 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
 .start-button:hover {
-  background-color: #0056b3;
+  background: #ff7979;
+}
+
+/* Mobile Friendly */
+@media (max-width: 600px) {
+  .landing-title {
+    font-size: 2rem;
+  }
+
+  .landing-description {
+    font-size: 1rem;
+  }
+
+  .name-input, .start-button {
+    width: 90%;
+  }
 }

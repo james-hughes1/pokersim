@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";  // Change here
+import { useNavigate } from "react-router-dom";
 import "./LandingPage.css";
 
 const LandingPage = () => {
   const [name, setName] = useState("");
-  const navigate = useNavigate();  // Change here
+  const navigate = useNavigate();
 
   const handleNameChange = (e) => {
     setName(e.target.value);
@@ -12,7 +12,6 @@ const LandingPage = () => {
 
   const handleSubmit = () => {
     if (name.trim()) {
-      // navigate("/game", { state: { name } });  // Change here
       localStorage.setItem("userName", name);
       navigate("/game");
     } else {
@@ -22,19 +21,18 @@ const LandingPage = () => {
 
   return (
     <div className="landing-container">
-      <h1 className="landing-title">Welcome to Poker Game</h1>
-      <p className="landing-description">
-        Enter your name to start playing!
-      </p>
+      <img src="/images/chip.png" alt="Poker Chip" className="poker-chip" />
+      <h1 className="landing-title">Welcome to Poker Royale</h1>
+      <p className="landing-description">Enter your name to join the table</p>
       <input
         type="text"
         value={name}
         onChange={handleNameChange}
         className="name-input"
-        placeholder="Enter your name"
+        placeholder="Your Name"
       />
       <button onClick={handleSubmit} className="start-button">
-        Start Game
+        🎲 Start Playing
       </button>
     </div>
   );
