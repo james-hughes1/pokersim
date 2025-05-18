@@ -94,11 +94,13 @@ class BettingRound {
     }
 
     blindBets() {
+        this.actionLog.addMessage("Blind betting:");
         let player = this.getCurrentPlayer();
         this.processAction(player.name, 'raise', this.blind, true);
         player = this.getCurrentPlayer();
         this.processAction(player.name, 'raise', this.blind, true);
         this.numBets = 2;
+        this.actionLog.addMessage("Blind betting finished.");
     }
   
     getCurrentPlayer() {
@@ -152,7 +154,7 @@ class BettingRound {
       
       if (player.stack < amountToCall) {
         console.log(`${player.name} is all-in with ${player.stack}!`);
-        this.actionLog.addMessage(`${player.name} is all-in with ${player.stack}!`);
+        this.actionLog.addMessage(`${player.name} is all-in with $${player.stack}!`);
         this.pot += player.stack;
         player.makeMove('call', player.stack);
       } else {
@@ -184,7 +186,7 @@ class BettingRound {
             player.makeMove('raise', player.stack);
             this.currentBet = player.currentBet;
             console.log(`${player.name} raises by ${raiseAmount} to go all-in, total bet is now ${this.currentBet}.`);
-            this.actionLog.addMessage(`${player.name} raises by ${raiseAmount} to go all-in, total bet is now ${this.currentBet}.`);
+            this.actionLog.addMessage(`${player.name} raises by $${raiseAmount} to go all-in, total bet is now $${this.currentBet}.`);
           }
         }
       } else {
@@ -192,7 +194,7 @@ class BettingRound {
         player.makeMove('raise', totalAmount);
         this.currentBet = player.currentBet;
         console.log(`${player.name} raises by ${amount}, total bet is now ${this.currentBet}.`);
-        this.actionLog.addMessage(`${player.name} raises by ${amount}, total bet is now ${this.currentBet}.`);
+        this.actionLog.addMessage(`${player.name} raises by $${amount}, total bet is now $${this.currentBet}.`);
       }
     }
   
