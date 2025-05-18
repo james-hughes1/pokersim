@@ -64,7 +64,7 @@ function findWinnerIndexes(activeHands, winnerHands) {
 
 
 class BettingRound {
-    constructor(players, communityCards, actionLog, dealerIndex, blind = null) {
+    constructor(players, communityCards, actionLog, dealerIndex, userName, blind = null) {
       this.players = players.filter(p => !p.hasFolded);  // Only active players
 
       // Figure out who goes first after dealer (people may have folded)
@@ -78,6 +78,7 @@ class BettingRound {
       }
       this.communityCards = communityCards;
       this.currentBet = 0;
+      this.userName = userName;
       this.players.forEach(player => {
         player.currentBet = 0;
       });
@@ -139,7 +140,8 @@ class BettingRound {
 
         this.numBets += 1;
         if (this.isRoundOver()) {
-            console.log(`Betting round finished. Pot is ${this.pot}`);
+            console.log(`Betting round finished. Pot is $${this.pot}`);
+            this.actionLog.addMessage(`Betting round finished. Pot is $${this.pot}.`);
             this.actionLog.addToPot(this.pot);
             this._resolveFinish();
         } else {
@@ -154,6 +156,7 @@ class BettingRound {
     fold(player) {
       player.makeMove('fold');
       console.log(`${player.name} folds.`);
+      this.actionLog.addMessage(`${player.name} folds.`);
       this.removePlayer(player);
     }
   
@@ -162,12 +165,14 @@ class BettingRound {
       
       if (player.stack < amountToCall) {
         console.log(`${player.name} is all-in with ${player.stack}!`);
+        this.actionLog.addMessage(`${player.name} is all-in with ${player.stack}!`);
         player.makeMove('call', player.stack);
         this.pot += player.stack;
       } else {
         player.makeMove('call', amountToCall);
         this.pot += amountToCall;
-        console.log(`${player.name} calls ${amountToCall}`);
+        console.log(`${player.name} calls.`);
+        this.actionLog.addMessage(`${player.name} calls.`);
       }
     }
   
@@ -176,7 +181,7 @@ class BettingRound {
   
       if (player.stack < totalAmount) {
         if (player.stack === 0) {
-          console.log(`${player.name} still all in.`)
+          console.log(`${player.name} still all in.`);
           player.makeMove('call', 0);
         } else {
           // Not enough to match the bet
@@ -184,20 +189,23 @@ class BettingRound {
             player.makeMove('call', this.currentBet - player.currentBet);
             this.pot += this.currentBet - player.currentBet;
             console.log(`${player.name} all in.`);
+            this.actionLog.addMessage(`${player.name} is all-in.`);
           } else {
             // Enough to match but not fully make the stated raise
             const raiseAmount = player.stack - (this.currentBet - player.currentBet);
             player.makeMove('raise', player.stack);
             this.pot += player.stack;
             this.currentBet = player.currentBet;
-            console.log(`${player.name} raises by ${raiseAmount} to go all-in, total bet is now ${this.currentBet}`);
+            console.log(`${player.name} raises by ${raiseAmount} to go all-in, total bet is now ${this.currentBet}.`);
+            this.actionLog.addMessage(`${player.name} raises by ${raiseAmount} to go all-in, total bet is now ${this.currentBet}.`);
           }
         }
       } else {
         player.makeMove('raise', totalAmount);
         this.pot += totalAmount;
         this.currentBet = player.currentBet;
-        console.log(`${player.name} raises by ${amount}, total bet is now ${this.currentBet}`);
+        console.log(`${player.name} raises by ${amount}, total bet is now ${this.currentBet}.`);
+        this.actionLog.addMessage(`${player.name} raises by ${amount}, total bet is now ${this.currentBet}.`);
       }
     }
   
@@ -225,7 +233,7 @@ class BettingRound {
   async promptAIForAction() {
     const player = this.getCurrentPlayer();
 
-    if (player.name === "User") {
+    if (player.name === this.userName) {
       return; // Wait for user input
     }
 
@@ -233,59 +241,79 @@ class BettingRound {
     player.thinking = true;
 
     // Delay 5 seconds before attempting the prompt
-    await new Promise(resolve => setTimeout(resolve, 20000));
+    await new Promise(resolve => setTimeout(resolve, 10000));
 
     let historyString = this.actionLog.getActionHistoryString(player.name);
     historyString = '...' + historyString.slice(-100);
     const prompt = `You're playing Texas Holdem as ${player.name}. Your hole cards: ${formatCards(player.hand)}. Moves: ${historyString}. Stacks: ${this.players.map(player => `${player.name}: $${player.stack}`).join('|')}. Recommend best move in form of (call, raise, fold) and amount.`.replace(/♠/g, 's')
-        .replace(/♥/g, 'h')
-        .replace(/♦/g, 'd')
-        .replace(/♣/g, 'c');
+      .replace(/♥/g, 'h')
+      .replace(/♦/g, 'd')
+      .replace(/♣/g, 'c');
 
-    // Create a timeout promise (5 seconds max for API response)
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("AI response timeout")), 10000)
-    );
+    // Retry logic
+    const maxRetries = 3;
+    let response;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        console.log(`Attempt ${attempt + 1}: sending prompt...`);
 
-    try {
-      // Race the AI response against the timeout
-      console.log(prompt);
-      const response = await Promise.race([
-        getCohereResponse(prompt),
-        timeoutPromise
-      ]);
+        // Race against a timeout
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("AI response timeout")), 2000)
+        );
 
-      const { action, amount } = JSON.parse(response.data.message.content[0].text);
-      console.log(`AI recommends: ${action} with amount ${amount}`);
+        response = await Promise.race([
+          getCohereResponse(prompt),
+          timeoutPromise
+        ]);
 
-      player.thinking = false;
-      await this.processAction(player.name, action, amount);
+        break; // If successful, break the loop
 
-    } catch (error) {
-      console.error('AI action failed or timed out:', error);
+      } catch (err) {
+        console.warn(`Attempt ${attempt + 1} failed:`, err.message);
 
-      // Fallback: fold
-      player.thinking = false;
-      if (Math.random() > 0.5) {
-        await this.processAction(player.name, 'fold', 0);
-      } else {
-        await this.processAction(player.name, 'call', 0);
+        if (attempt === maxRetries - 1) {
+          console.error("Max retries reached. Using fallback action.");
+        } else {
+          await new Promise(res => setTimeout(res, 2000 * (attempt + 1))); // Backoff: 2s, 4s...
+        }
       }
     }
-  }
 
+    player.thinking = false;
+
+    if (response) {
+      try {
+        const { action, amount } = JSON.parse(response.data.message.content[0].text);
+        console.log(`AI recommends: ${action} with amount ${amount}`);
+        await this.processAction(player.name, action, amount);
+      } catch (e) {
+        console.error("Failed to parse AI response:", e);
+        await this.processAction(player.name, 'fold', 0); // Parse fail fallback
+      }
+    } else {
+      // Fallback: random between fold/call
+      const fallback = Math.random() > 0.5 ? 'fold' : 'call';
+      await this.processAction(player.name, fallback, 0);
+    }
+  }
 }
   
 class ActionLog {
     constructor() {
       this.actions = [];  // Array to store actions
       this.pot = 0;
+      this.messages = []; // For message feed UI
     }
   
     // Method to add a new action
     addAction(playerName, action, amount, descr) {
       const actionData = { playerName, action, amount, descr};
       this.actions.push(actionData);
+    }
+
+    addMessage(msg) {
+      this.messages.push(msg);
     }
 
     addWinner(activePlayers, winningPlayers, pot, communityCards) {
@@ -418,6 +446,7 @@ class Player {
 
 class PokerGame {
     constructor(playerNames) {
+        this.userName = playerNames[0];
         this.players = playerNames.map(name => new Player(name));
         this.resetGame();
         this.actionLog = new ActionLog();
@@ -439,6 +468,7 @@ class PokerGame {
         if (activePlayers.length === 1) {
           const winner = activePlayers[0];
           console.log(`🏆 ${winner.name} wins! Everyone else folded.`);
+          this.actionLog.addMessage(`🏆 ${winner.name} wins! Everyone else folded.`);
           // Delay 5 seconds before moving to next round
           this.winMessage = `🏆 ${winner.name} wins! Everyone else folded.`;
           await new Promise(resolve => setTimeout(resolve, 5000));
@@ -462,6 +492,7 @@ class PokerGame {
             console.log(`🏆 Winner: ${winningPlayers[0].name}`);
             console.log(`Hole cards: ${formatCards(winningPlayers[0].hand)}`);
             console.log(`Hand: ${winner[0].descr}`)
+            this.actionLog.addMessage(`🏆 Winner: ${winningPlayers[0].name} with hand ${winner[0].descr}`);
             // Delay 5 seconds before moving to next round
             this.winMessage = `🏆 Winner: ${winningPlayers[0].name} with hand ${winner[0].descr}`;
             activePlayers.forEach(p => {p.showHands = true;});
@@ -469,8 +500,9 @@ class PokerGame {
             this.winMessage = "";
             activePlayers.forEach(p => {p.showHands = false;});
           } else {
-            console.log(`Tie: ${winner[0].descr}`)
-            winningPlayers.map(p => console.log(`${p.name}, ${formatCards(p.hand)}`))
+            console.log(`Tie: ${winner[0].descr}`);
+            this.actionLog.addMessage(`🏆 Tie: ${winningPlayers.map(p => p.name).join(", ")} with hand ${winner[0].descr}.`);
+            winningPlayers.map(p => console.log(`${p.name}, ${formatCards(p.hand)}`));
             // Delay 5 seconds before moving to next round
             this.winMessage = `🏆 Tie: ${winningPlayers.map(p => p.name).join(", ")} with hand ${winner[0].descr}.`;
             activePlayers.forEach(p => {p.showHands = true;});
@@ -491,7 +523,7 @@ class PokerGame {
 
     async startBettingRound(blind=null) {
         console.log("Betting round started!");
-        this.bettingRound = new BettingRound(this.players, this.communityCards, this.actionLog, this.dealerIndex, blind);
+        this.bettingRound = new BettingRound(this.players, this.communityCards, this.actionLog, this.dealerIndex, this.userName, blind);
         await this.bettingRound.promptAIForAction();
         await this.bettingRound.waitForFinish(); // <-- REAL AWAIT now
     }
@@ -504,20 +536,23 @@ class PokerGame {
             this.communityCards.push(this.deck.drawCard());
             this.communityCards.push(this.deck.drawCard());
             this.communityCards.push(this.deck.drawCard());
-            this.printSummary("User");
+            this.printSummary(this.userName);
             this.actionLog.addAction(this.players[this.dealerIndex].name, `deal-${this.currentRound}`, 0, formatCards(this.communityCards));
+            this.actionLog.addMessage("Flop dealt.");
             break;
         case 'Flop':
             this.currentRound = 'Turn';
             this.communityCards.push(this.deck.drawCard());
-            this.printSummary("User");
+            this.printSummary(this.userName);
             this.actionLog.addAction(this.players[this.dealerIndex].name, `deal-${this.currentRound}`, 0, formatCards(this.communityCards));
+            this.actionLog.addMessage("Turn dealt.");
             break;
         case 'Turn':
             this.currentRound = 'River';
             this.communityCards.push(this.deck.drawCard());
-            this.printSummary("User");
+            this.printSummary(this.userName);
             this.actionLog.addAction(this.players[this.dealerIndex].name, `deal-${this.currentRound}`, 0, formatCards(this.communityCards));
+            this.actionLog.addMessage("River dealt.");
             break;
         case 'River':
             this.currentRound = 'Showdown';
@@ -548,11 +583,12 @@ class PokerGame {
 
     async playMatch() {
         console.log("Dealing new cards...");
+        this.actionLog.addMessage("New round started.");
         this.players.forEach(player => {
             player.receiveCard(this.deck.drawCard());
             player.receiveCard(this.deck.drawCard());
         });
-        this.players.find(p => p.name === "User").showHands = true;
+        this.players.find(p => p.name === this.userName).showHands = true;
         await this.startBettingRound(this.blind);
         this.nextStage();
         let foundWinner = null;
@@ -562,11 +598,11 @@ class PokerGame {
             this.nextStage();
             foundWinner = await this.checkForWinner();
         }
-        this.printSummary("User");
+        this.printSummary(this.userName);
     }
 
     checkEnded () {
-        if (!this.players.some(p => p.name === "User")) {
+        if (!this.players.some(p => p.name === this.userName)) {
             return "lose";
         } else {
             if (this.players.length === 1) {

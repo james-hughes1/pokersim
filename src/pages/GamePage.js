@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import './GamePage.css';
 import PokerGame from "../poker_engine/poker.js";
 
-const game = new PokerGame(["User", "Robo-Rob", "Electric Elle", "Cyber Steve"]);
+const userName = localStorage.getItem("userName") || "User";
+const game = new PokerGame([userName, "Robo-Rob", "Electric Elle", "Cyber Steve"]);
 game.playUntilEliminated();
 
 function GamePage() {
@@ -11,18 +12,20 @@ function GamePage() {
   const [currentPlayer, setCurrentPlayer] = useState(game.bettingRound.currentPlayer);
   const [communityCards, setCommunityCards] = useState(game.communityCards || []);
   const [winMessage, setWinMessage] = useState("");
+  const [feedVersion, setFeedVersion] = useState(0);
 
   // Sync UI with the current game state on component mount
   useEffect(() => {
-  const interval = setInterval(() => {
-    setPlayers([...game.players]);
-    setCommunityCards([...game.communityCards || []]);
-    setCurrentPlayer(game.bettingRound.currentPlayer);
-    setWinMessage(game.winMessage);
-  }, 200);
+    const interval = setInterval(() => {
+      setPlayers([...game.players]);
+      setCommunityCards([...game.communityCards || []]);
+      setCurrentPlayer(game.bettingRound.currentPlayer);
+      setWinMessage(game.winMessage);
+      setFeedVersion(prev => prev + 1);
+    }, 200);
 
-  return () => clearInterval(interval);
-}, []);
+    return () => clearInterval(interval);
+  }, []);
 
   const getCardImage = (card) => {
     const rank = card.rank;
@@ -47,8 +50,23 @@ function GamePage() {
     setSliderValues(newSliders);
   };
 
+  useEffect(() => {
+    const el = document.querySelector(".feed-messages");
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [feedVersion]);
+
   return (
     <div className="table-container">
+      {/* New Game Feed Section */}
+      <div className="game-feed">
+        <h3>Game Feed</h3>
+        <div className="feed-messages">
+          {game.actionLog.messages.map((msg, i) => (
+            <div key={i} className="feed-line">{msg}</div>
+          ))}
+        </div>
+      </div>
+
       <div className="community-cards">
         {Array.from({ length: 5 }).map((_, i) => (
           <img
@@ -62,6 +80,10 @@ function GamePage() {
             className="card-img"
           />
         ))}
+      </div>
+
+      <div className="pot-display">
+        🪙 Pot: ${game.pot}
       </div>
 
       <div className="players-wrapper">
@@ -106,7 +128,7 @@ function GamePage() {
                         />
                       ))}
               </div>
-              {!player.hasFolded && player.name === "User" && (
+              {!player.hasFolded && player.name === userName && (
                 <div className="actions-section">
                   <button onClick={() => handleAction(index, 'fold')}>Fold</button>
                   <button onClick={() => handleAction(index, 'call')}>Check/Call</button>
