@@ -1,12 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import './GamePage.css';
 import PokerGame from "../poker_engine/poker.js";
 
-const userName = localStorage.getItem("userName") || "User";
-const game = new PokerGame([userName, "Robo-Rob", "Electric Elle", "Cyber Steve"]);
-game.playUntilEliminated();
-
 function GamePage() {
+  const userName = localStorage.getItem("userName") || "User";
+
+  const gameRef = useRef(null);
+  if (!gameRef.current) {
+    gameRef.current = new PokerGame([userName, "Robo-Rob", "Electric Elle", "Cyber Steve"]);
+    gameRef.current.playUntilEliminated();
+  }
+  const game = gameRef.current;
+
   const [players, setPlayers] = useState(game.players);
   const [sliderValues, setSliderValues] = useState(players.map(() => 10));
   const [currentPlayer, setCurrentPlayer] = useState(game.bettingRound.currentPlayer);
@@ -14,7 +19,6 @@ function GamePage() {
   const [winMessage, setWinMessage] = useState("");
   const [feedVersion, setFeedVersion] = useState(0);
 
-  // Sync UI with the current game state on component mount
   useEffect(() => {
     const interval = setInterval(() => {
       setPlayers([...game.players]);
@@ -25,7 +29,7 @@ function GamePage() {
     }, 200);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [game]);
 
   const getCardImage = (card) => {
     const rank = card.rank;
@@ -33,9 +37,9 @@ function GamePage() {
     return `/cards/${rank}${suit}.png`;
   };
 
-  const handleAction = (PlayerName, action) => {
-    const player = players[PlayerName];
-    const raiseAmount = sliderValues[PlayerName];
+  const handleAction = (PlayerIndex, action) => {
+    const player = players[PlayerIndex];
+    const raiseAmount = sliderValues[PlayerIndex];
     game.bettingRound.processAction(player.name, action, raiseAmount);
 
     // Update state to reflect game changes
@@ -50,17 +54,36 @@ function GamePage() {
     setSliderValues(newSliders);
   };
 
+  // Feed functionality
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const feedRef = useRef(null);
+
   useEffect(() => {
-    const el = document.querySelector(".feed-messages");
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [feedVersion]);
+    const el = feedRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 10;
+      setShouldAutoScroll(atBottom);
+    };
+
+    el.addEventListener("scroll", handleScroll);
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const el = feedRef.current;
+    if (shouldAutoScroll && el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [feedVersion, shouldAutoScroll]);
 
   return (
     <div className="table-container">
       {/* New Game Feed Section */}
       <div className="game-feed">
         <h3>Game Feed</h3>
-        <div className="feed-messages">
+        <div className="feed-messages" ref={feedRef}>
           {game.actionLog.messages.map((msg, i) => (
             <div key={i} className="feed-line">{msg}</div>
           ))}

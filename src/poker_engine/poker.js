@@ -51,18 +51,6 @@ function findWinnerIndexes(activeHands, winnerHands) {
   );
 }
 
-  // useEffect(() => {
-  //   // Only call ONCE when the page loads
-  //   handleGenerate(
-  //     "Produce a JSON that details the actions of a poker player. Here is the history of the current game so far, with the context that this player is 3rd out of 5 players. First round bets: 5, 10, 10, 10, 10, you get A club 2 diamond, community cards are A spades 3 spades, bets 10 fold, now it's your turn."
-  //   );
-  // }, []); // ← empty dependency array = run only ONCE after mount
-
-  // useEffect(() => {
-  //   console.log(move);
-  // }, [move]); // ← log when move changes
-
-
 class BettingRound {
     constructor(players, communityCards, actionLog, dealerIndex, userName, blind = null) {
       this.players = players.filter(p => !p.hasFolded);  // Only active players
@@ -142,7 +130,6 @@ class BettingRound {
         if (this.isRoundOver()) {
             console.log(`Betting round finished. Pot is $${this.pot}`);
             this.actionLog.addMessage(`Betting round finished. Pot is $${this.pot}.`);
-            this.actionLog.addToPot(this.pot);
             this._resolveFinish();
         } else {
             this.nextPlayer();
@@ -166,13 +153,13 @@ class BettingRound {
       if (player.stack < amountToCall) {
         console.log(`${player.name} is all-in with ${player.stack}!`);
         this.actionLog.addMessage(`${player.name} is all-in with ${player.stack}!`);
-        player.makeMove('call', player.stack);
         this.pot += player.stack;
+        player.makeMove('call', player.stack);
       } else {
-        player.makeMove('call', amountToCall);
         this.pot += amountToCall;
+        player.makeMove('call', amountToCall);
         console.log(`${player.name} calls.`);
-        this.actionLog.addMessage(`${player.name} calls.`);
+        this.actionLog.addMessage(`${player.name} ${amountToCall > 0 ? "calls" : "checks"}.`);
       }
     }
   
@@ -186,23 +173,23 @@ class BettingRound {
         } else {
           // Not enough to match the bet
           if (player.stack < this.currentBet - player.currentBet) {
-            player.makeMove('call', this.currentBet - player.currentBet);
             this.pot += this.currentBet - player.currentBet;
+            player.makeMove('call', this.currentBet - player.currentBet);
             console.log(`${player.name} all in.`);
             this.actionLog.addMessage(`${player.name} is all-in.`);
           } else {
             // Enough to match but not fully make the stated raise
             const raiseAmount = player.stack - (this.currentBet - player.currentBet);
-            player.makeMove('raise', player.stack);
             this.pot += player.stack;
+            player.makeMove('raise', player.stack);
             this.currentBet = player.currentBet;
             console.log(`${player.name} raises by ${raiseAmount} to go all-in, total bet is now ${this.currentBet}.`);
             this.actionLog.addMessage(`${player.name} raises by ${raiseAmount} to go all-in, total bet is now ${this.currentBet}.`);
           }
         }
       } else {
-        player.makeMove('raise', totalAmount);
         this.pot += totalAmount;
+        player.makeMove('raise', totalAmount);
         this.currentBet = player.currentBet;
         console.log(`${player.name} raises by ${amount}, total bet is now ${this.currentBet}.`);
         this.actionLog.addMessage(`${player.name} raises by ${amount}, total bet is now ${this.currentBet}.`);
@@ -331,10 +318,6 @@ class ActionLog {
           const descr = Hand.solve(fullPlayerHand).descr;
           this.addAction(player.name, action, amount, descr);
         }
-    }
-
-    addToPot(amount) {
-        this.pot += amount;
     }
 
     // Method to get the action log
@@ -529,7 +512,6 @@ class PokerGame {
     }
 
     nextStage() {
-        this.pot = this.actionLog.pot;
         switch (this.currentRound) {
         case 'Pre-Flop':
             this.currentRound = 'Flop';
@@ -590,11 +572,13 @@ class PokerGame {
         });
         this.players.find(p => p.name === this.userName).showHands = true;
         await this.startBettingRound(this.blind);
+        this.pot += this.bettingRound.pot;
         this.nextStage();
         let foundWinner = null;
         foundWinner = await this.checkForWinner();
         while (!foundWinner) {
             await this.startBettingRound();
+            this.pot += this.bettingRound.pot;
             this.nextStage();
             foundWinner = await this.checkForWinner();
         }
