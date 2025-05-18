@@ -112,7 +112,38 @@
 }
 
 .slider-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   margin-top: 8px;
+}
+
+.slider-label {
+  margin-bottom: 4px;
+  font-weight: bold;
+}
+
+.slider-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider-button {
+  padding: 4px 10px;
+  font-size: 18px;
+  cursor: pointer;
+  border: none;
+  background-color: #ddd;
+  border-radius: 4px;
+}
+
+.slider-button:hover {
+  background-color: #bbb;
+}
+
+.raise-slider {
+  width: 100px;
 }
 
 .dealer-chip {

@@ -157,14 +157,33 @@ function GamePage() {
                   <button onClick={() => handleAction(index, 'call')}>Check/Call</button>
                   <button onClick={() => handleAction(index, 'raise')}>Raise</button>
                   <div className="slider-container">
-                    Raise Amount: ${sliderValues[index]}
-                    <input
-                      type="range"
-                      min="5"
-                      max={player.stack}
-                      value={sliderValues[index]}
-                      onChange={(e) => handleSliderChange(index, Number(e.target.value))}
-                    />
+                    <div className="slider-label">Raise Amount: ${sliderValues[index]}</div>
+                    <div className="slider-controls">
+                      <button
+                        onClick={() =>
+                          handleSliderChange(index, Math.max(5, sliderValues[index] - 1))
+                        }
+                        className="slider-button"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="range"
+                        min="5"
+                        max={player.stack}
+                        value={sliderValues[index]}
+                        onChange={(e) => handleSliderChange(index, Number(e.target.value))}
+                        className="raise-slider"
+                      />
+                      <button
+                        onClick={() =>
+                          handleSliderChange(index, Math.min(player.stack, sliderValues[index] + 1))
+                        }
+                        className="slider-button"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
